@@ -19,8 +19,8 @@ export const getOnlyJournals = (req: Request, res: Response) => {
 export const getJournalArchives = (req: Request, res: Response) => {
   try {
     const { archive_in, journal_id } = req.body;
-    const query = `SELECT a.id, a.article_title, a.archive_doi,a.archive_year,a.archive_volume, a.archive_fulltext,a.archive_pdf,a.archive_in, a.created_date,a.archive_desc, b.journal_name, c.category_name FROM wp_journal_archives a INNER JOIN wp_journals b ON a.journal_id = b.id LEFT JOIN wp_journal_main_categories c ON b.main_category_id = c.category_id WHERE a.archive_in = "${archive_in}" AND a.journal_id = "${journal_id}" AND a.deleted = 1`;
-    db.query(query, async (err, data: any) => {
+    const query = `SELECT a.id, a.article_title, a.article_link, a.article_authors, a.archive_doi, a.archive_year, a.article_type, a.archive_volume, v.volume_name AS volume_name, a.archive_fulltext, a.archive_pdf, a.supli_pdf, a.archive_in, a.created_date, a.archive_desc, b.journal_name, c.category_name FROM wp_journal_archives a INNER JOIN wp_journals b ON a.journal_id = b.id LEFT JOIN wp_journal_main_categories c ON b.main_category_id = c.category_id LEFT JOIN wp_journal_volumes v ON v.id = a.archive_volume WHERE a.archive_in = ? AND a.journal_id = ? AND a.deleted = 1`;
+    db.query(query, [archive_in, journal_id], async (err, data: any) => {
       if (err) return res.status(500).json(err);
       const result = data;
       return res.status(200).json({ data: result });
@@ -133,14 +133,14 @@ export const updateArchive = (req: Request, res: Response) => {
     const article_title = data.article_title || '';
 
     if (data.id) {
-      const sql = `UPDATE wp_journal_archives SET article_pub_date = ?, journal_id = ?, category_id = ?, archive_desc = ?, archive_doi = ?, archive_year = ?, archive_volume = ?, archive_fulltext = ?, archive_pdf = ?, journal_slug = ?, archive_in = ?, supli_pdf = ?, article_title = ?, article_link = ?, article_authors = ?, doi_name = ?, doi_link = ? WHERE id = ?`;
+      const sql = `UPDATE wp_journal_archives SET article_pub_date = ?, journal_id = ?, archive_desc = ?, archive_doi = ?, archive_year = ?, article_type = ?, archive_volume = ?, archive_fulltext = ?, archive_pdf = ?, journal_slug = ?, archive_in = ?, supli_pdf = ?, article_title = ?, article_link = ?, article_authors = ?, doi_name = ?, doi_link = ? WHERE id = ?`;
       const values = [
         data.article_pub_date,
         data.journal_id,
-        data.category_id,
         archive_desc,
         data.archive_doi,
         data.archive_year,
+        data.article_type,
         data.archive_volume,
         archive_fulltext,
         archive_pdf,
@@ -160,7 +160,7 @@ export const updateArchive = (req: Request, res: Response) => {
         return res.json({ status: true, message: 'Journal Archive Edited Successfully' });
       });
     } else {
-      const sql = `INSERT INTO wp_journal_archives (article_pub_date, article_title, article_link, article_authors, doi_name, doi_link, journal_id, category_id, archive_desc, archive_doi, archive_year, archive_volume, archive_fulltext, archive_pdf, supli_pdf, archive_in, journal_slug, created_date, updated_date, deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`;
+      const sql = `INSERT INTO wp_journal_archives (article_pub_date, article_title, article_link, article_authors, doi_name, doi_link, journal_id, category_id, archive_desc, archive_doi, archive_year, article_type, archive_volume, archive_fulltext, archive_pdf, supli_pdf, archive_in, journal_slug, created_date, updated_date, deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`;
       const today = new Date().toISOString().slice(0, 10);
       const values = [
         data.article_pub_date,
@@ -170,10 +170,11 @@ export const updateArchive = (req: Request, res: Response) => {
         data.doi_name,
         data.doi_link,
         data.journal_id,
-        data.category_id,
+        '0',
         archive_desc,
         data.archive_doi,
         data.archive_year,
+        data.article_type,
         data.archive_volume,
         archive_fulltext,
         archive_pdf,
@@ -341,30 +342,35 @@ export const addOrUpdateJournal = (req: Request, res: Response) => {
       journal_url_slug,
       journal_name,
       issn_number,
-      impact_factor,
-      impact_factor_equation,
       journal_meta_keywords,
-      journal_ic_value,
       main_category_id,
       journal_description,
       banner_image,
       sidebar_image,
+      journal_image,
     } = req.body;
 
     const today = new Date().toISOString().slice(0, 10);
+    const created_date = req.body.created_date || today;
+    const updated_date = req.body.updated_date || today;
+    const deleted = req.body.deleted ?? '1';
 
-    // Validate required fields
-    if (
-      !journal_url_slug ||
-      !journal_name ||
-      !issn_number ||
-      !impact_factor ||
-      !impact_factor_equation ||
-      !banner_image ||
-      !sidebar_image
-    ) {
+    const requiredFields = {
+      journal_url_slug,
+      journal_name,
+      issn_number,
+      banner_image,
+      sidebar_image,
+      journal_image,
+    };
+    const missingFields = Object.entries(requiredFields)
+      .filter(([, value]) => value == null || String(value).trim() === "")
+      .map(([field]) => field);
+
+    if (missingFields.length > 0) {
       return res.status(400).json({
-        message: 'Invalid request. Required journal fields are missing.',
+        message: `Invalid request. Missing required journal fields: ${missingFields.join(", ")}.`,
+        missingFields,
       });
     }
 
@@ -377,55 +383,49 @@ export const addOrUpdateJournal = (req: Request, res: Response) => {
       INSERT INTO wp_journals
         (
           id,
-          journal_url_slug,
-          journal_name,
           issn_number,
-          impact_factor,
-          impact_factor_equation,
-          journal_meta_keywords,
-          journal_ic_value,
+          created_date,
+          updated_date,
+          journal_name,
+          journal_url_slug,
           main_category_id,
-          journal_description,
+          journal_meta_keywords,
           banner_image,
           sidebar_image,
-          updated_date,
-          created_date,
+          journal_image,
+          journal_description,
           deleted
         )
-      VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '0')
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
       ON DUPLICATE KEY UPDATE
-        journal_url_slug = VALUES(journal_url_slug),
-        journal_name = VALUES(journal_name),
         issn_number = VALUES(issn_number),
-        impact_factor = VALUES(impact_factor),
-        impact_factor_equation = VALUES(impact_factor_equation),
-        journal_meta_keywords = VALUES(journal_meta_keywords),
-        journal_ic_value = VALUES(journal_ic_value),
+        updated_date = VALUES(updated_date),
+        journal_name = VALUES(journal_name),
+        journal_url_slug = VALUES(journal_url_slug),
         main_category_id = VALUES(main_category_id),
-        journal_description = VALUES(journal_description),
+        journal_meta_keywords = VALUES(journal_meta_keywords),
         banner_image = VALUES(banner_image),
         sidebar_image = VALUES(sidebar_image),
-        updated_date = VALUES(updated_date),
-        deleted = '0'
+        journal_image = VALUES(journal_image),
+        journal_description = VALUES(journal_description),
+        deleted = VALUES(deleted)
     `;
 
     const values = [
       id,
-      journal_url_slug,
-      journal_name,
       issn_number,
-      impact_factor,
-      impact_factor_equation,
+      created_date,
+      updated_date,
+      journal_name,
+      journal_url_slug,
+      main_category_id || '0',
       journal_meta_keywords,
-      journal_ic_value,
-      main_category_id,
-      journal_description,
       banner_image,
       sidebar_image,
-      today, // updated_date
-      today, // created_date
+      journal_image,
+      journal_description || '',
+      deleted,
     ];
 
     db.query(query, values, (err: any, result: any) => {
@@ -464,8 +464,7 @@ export const addOrUpdateJournal = (req: Request, res: Response) => {
 
 
 export const getJournalPosts = (req: Request, res: Response) => {
-  // Query to get the newest articles (adjust the LIMIT as needed)
-  const query = `SELECT jp.id, jp.post_name, j.journal_name, mc.category_name,jp.created_date, jp.updated_date FROM wp_journal_posts jp INNER JOIN wp_journals j on jp.journal_id = j.id LEFT JOIN wp_journal_main_categories mc on mc.category_id = j.main_category_id WHERE jp.deleted="1"`;
+  const query = `SELECT jp.id, jp.post_name, j.journal_name, mc.category_name,jp.created_date, jp.updated_date FROM wp_journal_posts jp INNER JOIN wp_journals j on jp.journal_id = j.id LEFT JOIN wp_journal_main_categories mc on mc.category_id = j.main_category_id WHERE jp.deleted="1" ORDER BY jp.created_date DESC`;
 
   db.query(query, (err, data: any) => {
     if (err) {
@@ -504,7 +503,6 @@ export const addOrUpdateJournalPost = (req: Request, res: Response) => {
     const id = req.params.id || req.body.id || null;
 
     const {
-      category_id,
       journal_id,
       post_content,
       post_keywords,
@@ -518,7 +516,6 @@ export const addOrUpdateJournalPost = (req: Request, res: Response) => {
 
     // Validate required fields
     if (
-      !category_id ||
       !journal_id ||
       !post_content ||
       !post_keywords ||
@@ -539,7 +536,6 @@ export const addOrUpdateJournalPost = (req: Request, res: Response) => {
       const updateQuery = `
         UPDATE wp_journal_posts
         SET
-          category_id = ?,
           journal_id = ?,
           post_name = ?,
           post_content = ?,
@@ -552,7 +548,6 @@ export const addOrUpdateJournalPost = (req: Request, res: Response) => {
       `;
 
       const updateValues = [
-        category_id,
         journal_id,
         post_name,
         post_content,
@@ -613,7 +608,7 @@ export const addOrUpdateJournalPost = (req: Request, res: Response) => {
     `;
 
     const insertValues = [
-      category_id,
+      '0',
       journal_id,
       post_name,
       post_content,

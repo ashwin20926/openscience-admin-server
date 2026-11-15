@@ -9,9 +9,9 @@ import sizeOf from "image-size";
 // UPLOAD DIRECTORIES
 // ============================================================
 
-const DEFAULT_UPLOAD_DIR = String.raw`D:\wamp64\www\avens-prod\wp-content\uploads1`;
+const DEFAULT_UPLOAD_DIR = String.raw`D:\wamp64\www\openscience\wp-content\uploads`;
 
-const FULLTEXT_UPLOAD_DIR = String.raw`D:\wamp64\www\avens-prod\fulltextarticles\wp-content\uploads`;
+const FULLTEXT_UPLOAD_DIR = String.raw`D:\wamp64\www\openscience\fulltextarticles\wp-content\uploads`;
 
 // const DEFAULT_UPLOAD_DIR = String.raw`/home/avensnvx/public_html/public/wp-content/uploads`;
 // const FULLTEXT_UPLOAD_DIR = String.raw`/home/avensnvx/public_html/fulltextarticles/wp-content/uploads`;

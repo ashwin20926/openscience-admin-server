@@ -9,8 +9,11 @@ export const getFullTextArticles = async (req: Request, res: Response) => {
     const shouldPaginate = !!req.query.page || !!req.query.pageSize;
     const offset = (page - 1) * (pageSize || 0);
     const countQuery = `SELECT COUNT(*) AS totalCount FROM wp_fulltextarticles WHERE post_type = 'post' AND deleted = '1'`;
-    const selectAllQuery = `SELECT ID, post_title, post_browser_title, post_browser_title_slug, post_date FROM wp_fulltextarticles WHERE post_type = 'post' AND deleted = '1' ORDER BY post_date DESC`;
-    const selectQuery = `SELECT ID, post_title, post_browser_title, post_browser_title_slug, post_date FROM wp_fulltextarticles WHERE post_type = 'post' AND deleted = '1' ORDER BY post_date DESC LIMIT ${pageSize} OFFSET ${offset}`;
+    const articleFields = `ID, post_title, post_browser_title, post_browser_title_slug, post_content,
+      volume, issue AS Issue, season, special_issue, suplementary_issue, Issue_qa AS issue_qa,
+      submitted_date, accepted_date, published_date, first_page, last_page, post_date`;
+    const selectAllQuery = `SELECT ${articleFields} FROM wp_fulltextarticles WHERE post_type = 'post' AND deleted = '1' ORDER BY post_date DESC`;
+    const selectQuery = `SELECT ${articleFields} FROM wp_fulltextarticles WHERE post_type = 'post' AND deleted = '1' ORDER BY post_date DESC LIMIT ${pageSize} OFFSET ${offset}`;
 
     const pool = db.promise();
     const [countResult] = await pool.query(countQuery);
@@ -42,7 +45,7 @@ export const saveFullTextArticle = async (req: Request, res: Response) => {
       category_id: data.categoryId || data.category_id || '',
       journal_id: data.journal_id || '',
       submission_date: data.submission_date || '',
-      publication_date: data.publication_date || '',
+      published_date: data.published_date || '',
       accepted_date: data.accepted_date || '',
       citation_volume: data.citation_volume || '',
       citation_issue: data.citation_issue || '',
@@ -66,7 +69,7 @@ export const saveFullTextArticle = async (req: Request, res: Response) => {
     const pool = db.promise();
 
     if (recordId) {
-      const sql = `UPDATE wp_fulltextarticles SET post_content_filtered = ?, post_modified_gmt = ?, pinged = ?, to_ping = ?, author_affliations= ?, post_date_gmt = ?, post_title = ?, post_browser_title = ?, post_browser_title_slug = ?, post_meta_keywords = ?, category_id = ?, journal_id = ?, submission_date = ?, publication_date = ?, accepted_date = ?, citation_volume = ?, citation_issue = ?, citation_firstpage = ?, citation_lastpage = ?, authors = ?, post_content = ?, json_format = ?, post_type = ?, deleted = ?, post_modified = ? WHERE ID = ?`;
+      const sql = `UPDATE wp_fulltextarticles SET post_content_filtered = ?, post_modified_gmt = ?, pinged = ?, to_ping = ?, author_affliations= ?, post_date_gmt = ?, post_title = ?, post_browser_title = ?, post_browser_title_slug = ?, post_meta_keywords = ?, category_id = ?, journal_id = ?, submission_date = ?, published_date = ?, accepted_date = ?, citation_volume = ?, citation_issue = ?, citation_firstpage = ?, citation_lastpage = ?, authors = ?, post_content = ?, json_format = ?, post_type = ?, deleted = ?, post_modified = ? WHERE ID = ?`;
       const values = [
         payload.post_content_filtered,
         payload.post_modified_gmt,
@@ -81,7 +84,7 @@ export const saveFullTextArticle = async (req: Request, res: Response) => {
         payload.category_id,
         payload.journal_id,
         payload.submission_date,
-        payload.publication_date,
+        payload.published_date,
         payload.accepted_date,
         payload.citation_volume,
         payload.citation_issue,
@@ -100,7 +103,7 @@ export const saveFullTextArticle = async (req: Request, res: Response) => {
       return res.status(200).json({ status: true, message: 'Fulltext article updated successfully', data: result });
     }
 
-    const sql = `INSERT INTO wp_fulltextarticles (post_content_filtered, post_modified_gmt, pinged, to_ping, author_affliations, post_date_gmt, post_title, post_browser_title, post_browser_title_slug, post_meta_keywords, category_id, journal_id, submission_date, publication_date, accepted_date, citation_volume, citation_issue, citation_firstpage, citation_lastpage, authors, post_content, json_format, post_type, deleted, post_date, post_modified) VALUES (?,?, ?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    const sql = `INSERT INTO wp_fulltextarticles (post_content_filtered, post_modified_gmt, pinged, to_ping, author_affliations, post_date_gmt, post_title, post_browser_title, post_browser_title_slug, post_meta_keywords, category_id, journal_id, submission_date, published_date, accepted_date, citation_volume, citation_issue, citation_firstpage, citation_lastpage, authors, post_content, json_format, post_type, deleted, post_date, post_modified) VALUES (?,?, ?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
     const values = [
       payload.post_content_filtered,
       payload.post_modified_gmt,
@@ -115,7 +118,7 @@ export const saveFullTextArticle = async (req: Request, res: Response) => {
       payload.category_id,
       payload.journal_id,
       payload.submission_date,
-      payload.publication_date,
+      payload.published_date,
       payload.accepted_date,
       payload.citation_volume,
       payload.citation_issue,
@@ -141,7 +144,13 @@ export const saveFullTextArticle = async (req: Request, res: Response) => {
 export const getFulltxtArticleById = (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const query = `SELECT post_browser_title_slug, publication_date, authors, citation_volume, citation_issue, citation_firstpage, citation_lastpage, ID,post_title,json_format, post_browser_title,post_meta_keywords,post_content,post_date,journal_id,category_id,submission_date, accepted_date FROM  wp_fulltextarticles WHERE id =${id} `;
+    const query = `SELECT post_browser_title_slug, published_date, authors,
+      volume AS citation_volume, issue AS citation_issue,
+      first_page AS citation_firstpage, last_page AS citation_lastpage,
+      ID, post_title, json_format, post_browser_title, post_meta_keywords,
+      post_content, post_date, journal_id, category_id,
+      submitted_date AS submission_date, accepted_date
+      FROM wp_fulltextarticles WHERE id = ${id}`;
     db.query(query, async (err, data: any) => {
       if (err) return res.status(500).json(err);
       return res.status(200).json({ data });

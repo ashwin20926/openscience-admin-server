@@ -5,7 +5,7 @@ const HttpError = require('../models/http-error');
 export const getEbMembersByJournalId = (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const query = `SELECT eb.id,eb.eb_post_slug,eb.eb_journal_slug,j.journal_name,mc.category_name,eb.eb_member_name,eb.eb_member_email, eb.eb_member_photo,eb.eb_member_country,eb.editor_chief,eb.eb_member_desc,eb.updated_date FROM wp_eb_members eb INNER JOIN wp_journals j on eb.journal_id = j.id INNER JOIN wp_journal_main_categories mc on mc.category_id = j.main_category_id WHERE eb.deleted="1" AND eb.journal_id = "${id}"`;
+    const query = `SELECT eb.id,eb.eb_post_slug,eb.eb_journal_slug,j.journal_name,eb.eb_member_name,eb.eb_member_email, eb.eb_member_photo,eb.eb_member_country,eb.editor_chief,eb.eb_member_desc,eb.updated_date FROM wp_eb_members eb INNER JOIN wp_journals j on eb.journal_id = j.id WHERE eb.deleted="1" AND eb.journal_id = "${id}"`;
 
     db.query(query, async (err, data: any) => {
       if (err) return res.status(500).json(err);
