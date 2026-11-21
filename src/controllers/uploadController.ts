@@ -488,7 +488,7 @@ export const uploadFiles = async (req: Request, res: Response) => {
         //   safeName,
         // )}`,
         
-        url: `https://www.avensonline.org${publicUploadPath}/${encodeURIComponent(
+        url: `http://localhost/openscience${publicUploadPath}/${encodeURIComponent(
           safeName,
         )}`,
       };
